@@ -9,16 +9,8 @@ import numpy as np
 from dataclasses import dataclass
 from pathlib import Path
 from config.settings import config
-
-try:
-    import mss
-except ImportError:
-    mss = None
-
-try:
-    import keyboard
-except ImportError:
-    keyboard = None
+import mss
+import keyboard
 
 
 class InputHandler:
@@ -311,12 +303,12 @@ class MCOCDataCollector:
 if __name__ == "__main__":
     print("Starting MCOC Data Collector (10 second test)...")
     try:
-        time.sleep(2)
+        time.sleep(4)
         collector = MCOCDataCollector()
         print(f"Saving to: {collector.get_output_dir()}")
         print("Press W, A, S, D, SPACE while testing...")
         collector.start()
-        time.sleep(10)  # Run for 10 seconds
+        time.sleep(120)  # Run for 10 seconds
         collector.stop()
         print("Test completed!")
 
