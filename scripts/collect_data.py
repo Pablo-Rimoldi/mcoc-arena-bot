@@ -10,7 +10,7 @@ try:
     print(f"Saving to: {collector.get_output_dir()}")
     print("Press W, A, S, D, SPACE while testing...")
     collector.start()
-    time.sleep(120)  # Run for 10 seconds
+    time.sleep(40)  # Run for 10 seconds
     collector.stop()
     print("Test completed!")
 
