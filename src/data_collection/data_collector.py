@@ -8,7 +8,9 @@ from pathlib import Path
 import mss
 import keyboard
 from config.settings import config
-
+from .screen_capture import ScreenCapture
+from .file_manager import FileManager
+from ..game_calibrator import GameAreaDetector
 
 class InputHandler:
     """Handles keyboard input detection."""
@@ -33,149 +35,6 @@ class InputHandler:
             # keyboard library might not work in some environments (e.g., remote shells)
             return 'idle'
 
-
-class ScreenCapture:
-    """Handles screen capture operations."""
-    def __init__(self):
-        self._sct = mss.mss()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self._sct:
-            self._sct.close()
-    def capture_region(self, region: Optional[Dict] = None) -> np.ndarray:
-        """Capture screen region and return as BGR numpy array."""
-        # If no region is specified, capture the primary monitor
-        monitor = region if region else self._sct.monitors[1]
-        # Grab the data
-        sct_img = self._sct.grab(monitor)
-        # Convert to a NumPy array
-        screenshot = np.array(sct_img)
-        # Convert from BGRA to BGR
-        if screenshot.shape[2] == 4:
-            screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGRA2BGR)
-
-        return screenshot
-
-
-class GameAreaDetector:
-    def __init__(self):
-        self.game_region: Optional[Tuple[int, int, int, int]] = None
-        self.is_calibrated = False
-
-    def find_main_red_rectangle(self, screenshot: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
-        """Finds the largest contour corresponding to the red game window frame."""
-        lower_bound = np.clip(config.TARGET_COLOR_BGR -
-                              config.COLOR_TOLERANCE, 0, 255)
-        upper_bound = np.clip(config.TARGET_COLOR_BGR +
-                              config.COLOR_TOLERANCE, 0, 255)
-        mask = cv2.inRange(screenshot, lower_bound, upper_bound)
-
-        kernel = np.ones((10, 10), np.uint8)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-
-        contours, _ = cv2.findContours(
-            mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        if not contours:
-            print("Debug: No red contours found on screen.")
-            return None
-
-        largest_contour = max(contours, key=cv2.contourArea)
-        x, y, w, h = cv2.boundingRect(largest_contour)
-
-        if w < config.MIN_WIDTH or h < config.MIN_HEIGHT:
-            print(
-                f"Debug: Largest contour found at ({x},{y}) with size ({w},{h}) is too small. Skipping.")
-            return None
-
-        print(
-            f"Debug: Found main game window at ({x},{y}) with size ({w},{h}).")
-
-        top_crop_pixels = int(h * config.TOP_BAR_CROP_PERCENTAGE)
-        final_x = x + config.SIDE_MARGIN
-        final_y = y + top_crop_pixels
-        final_w = w - (2 * config.SIDE_MARGIN)
-        final_h = h - top_crop_pixels - config.BOTTOM_MARGIN
-        return (final_x, final_y, final_w, final_h)
-
-    def calibrate(self, screenshot: np.ndarray, output_dir: Path) -> bool:
-        """Calibrate by finding the main red rectangle and save a preview."""
-        print("Calibrating game area by finding the main red rectangle...")
-
-        region = self.find_main_red_rectangle(screenshot)
-
-        if region:
-            self.game_region = region
-            self.is_calibrated = True
-            print(
-                f"Calibration successful! Game area defined at: {self.game_region}")
-
-            try:
-                x, y, w, h = self.game_region
-                preview_image = screenshot[y:y+h, x:x+w]
-
-                if preview_image.size > 0:
-                    preview_path = output_dir / "_calibration_preview.png"
-                    cv2.imwrite(str(preview_path), preview_image)
-                    print(f"Saved calibration preview to: {preview_path}")
-                else:
-                    print("Warning: Preview image is empty, could not save.")
-            except Exception as e:
-                print(f"Error saving calibration preview: {e}")
-
-            return True
-
-        h_scr, w_scr = screenshot.shape[:2]
-        self.game_region = (0, 0, w_scr, h_scr)
-        self.is_calibrated = True
-        print("Warning: Game area auto-detection failed. Falling back to full screen.")
-        return False
-
-    def get_mss_region(self) -> Optional[Dict]:
-        """Convert region tuple to mss format."""
-        if not self.is_calibrated or not self.game_region:
-            return None
-        x, y, w, h = self.game_region
-        return {"left": x, "top": y, "width": w, "height": h}
-
-
-class FileManager:
-    """Handles file operations and naming."""
-    def __init__(self, output_dir: str):
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.counter = self._init_counter()
-    def _init_counter(self) -> int:
-        """Initialize the counter based on existing files in the directory."""
-        existing_files = list(self.output_dir.glob("*.png"))
-        existing_files = [
-            f for f in existing_files if f.name != "_calibration_preview.png"]
-        if not existing_files:
-            return 0
-
-        nums = []
-        for f in existing_files:
-            try:
-                num = int(f.stem.split('_')[0])
-                nums.append(num)
-            except (ValueError, IndexError):
-                continue
-
-        return max(nums) + 1 if nums else 0
-
-    def generate_filename(self, action: str = 'idle') -> str:
-        """Generate filename as a zero-padded integer plus action, e.g., 000001_w.png."""
-        filename = f"{self.counter:06d}_{action}.png"
-        self.counter += 1
-        return filename
-
-    def save_image(self, image: np.ndarray, filename: str) -> bool:
-        """Save image to disk."""
-        filepath = self.output_dir / filename
-        return cv2.imwrite(str(filepath), image)
 
 
 class MCOCDataCollector:
