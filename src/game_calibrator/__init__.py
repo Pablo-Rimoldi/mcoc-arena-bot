@@ -1,0 +1,1 @@
+from .game_area_detector import GameAreaDetector
