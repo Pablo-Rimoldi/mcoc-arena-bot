@@ -8,9 +8,9 @@ from pathlib import Path
 import mss
 import keyboard
 from config.settings import config
-from .screen_capture import ScreenCapture
-from .file_manager import FileManager
-from ..game_calibrator import GameAreaDetector
+from src.data_collection.screen_capture import ScreenCapture
+from src.data_collection.file_manager import FileManager
+from src.game_calibrator import GameAreaDetector
 
 class InputHandler:
     """Handles keyboard input detection."""
