@@ -9,6 +9,7 @@ import mss
 import keyboard
 from config.settings import config
 
+
 class InputHandler:
     """Handles keyboard input detection."""
 
@@ -32,9 +33,9 @@ class InputHandler:
             # keyboard library might not work in some environments (e.g., remote shells)
             return 'idle'
 
+
 class ScreenCapture:
     """Handles screen capture operations."""
-
     def __init__(self):
         self._sct = mss.mss()
 
@@ -44,53 +45,39 @@ class ScreenCapture:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._sct:
             self._sct.close()
-
     def capture_region(self, region: Optional[Dict] = None) -> np.ndarray:
         """Capture screen region and return as BGR numpy array."""
         # If no region is specified, capture the primary monitor
         monitor = region if region else self._sct.monitors[1]
-        
         # Grab the data
         sct_img = self._sct.grab(monitor)
-        
         # Convert to a NumPy array
         screenshot = np.array(sct_img)
-        
         # Convert from BGRA to BGR
         if screenshot.shape[2] == 4:
             screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGRA2BGR)
-            
+
         return screenshot
 
-class GameAreaDetector:
-    """
-    Detects the main game window by finding the largest rectangular contour 
-    of a specific red color. This is a simple and direct approach.
-    """
-    # Colore del bordo in formato BGR (Blue, Green, Red)
-    # Corrisponde a RGB(208, 0, 12) -> #d0000c
-    TARGET_COLOR_BGR = np.array([12, 0, 208])
-    COLOR_TOLERANCE = 20
-    MIN_WIDTH = 600
-    MIN_HEIGHT = 400
-    TOP_BAR_CROP_PERCENTAGE = 0.085
-    SIDE_MARGIN = 3
-    BOTTOM_MARGIN = 3
 
+class GameAreaDetector:
     def __init__(self):
         self.game_region: Optional[Tuple[int, int, int, int]] = None
         self.is_calibrated = False
 
     def find_main_red_rectangle(self, screenshot: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
         """Finds the largest contour corresponding to the red game window frame."""
-        lower_bound = np.clip(self.TARGET_COLOR_BGR - self.COLOR_TOLERANCE, 0, 255)
-        upper_bound = np.clip(self.TARGET_COLOR_BGR + self.COLOR_TOLERANCE, 0, 255)
+        lower_bound = np.clip(config.TARGET_COLOR_BGR -
+                              config.COLOR_TOLERANCE, 0, 255)
+        upper_bound = np.clip(config.TARGET_COLOR_BGR +
+                              config.COLOR_TOLERANCE, 0, 255)
         mask = cv2.inRange(screenshot, lower_bound, upper_bound)
 
         kernel = np.ones((10, 10), np.uint8)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(
+            mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         if not contours:
             print("Debug: No red contours found on screen.")
@@ -99,35 +86,37 @@ class GameAreaDetector:
         largest_contour = max(contours, key=cv2.contourArea)
         x, y, w, h = cv2.boundingRect(largest_contour)
 
-        if w < self.MIN_WIDTH or h < self.MIN_HEIGHT:
-            print(f"Debug: Largest contour found at ({x},{y}) with size ({w},{h}) is too small. Skipping.")
+        if w < config.MIN_WIDTH or h < config.MIN_HEIGHT:
+            print(
+                f"Debug: Largest contour found at ({x},{y}) with size ({w},{h}) is too small. Skipping.")
             return None
-            
-        print(f"Debug: Found main game window at ({x},{y}) with size ({w},{h}).")
 
-        top_crop_pixels = int(h * self.TOP_BAR_CROP_PERCENTAGE)
-        final_x = x + self.SIDE_MARGIN
+        print(
+            f"Debug: Found main game window at ({x},{y}) with size ({w},{h}).")
+
+        top_crop_pixels = int(h * config.TOP_BAR_CROP_PERCENTAGE)
+        final_x = x + config.SIDE_MARGIN
         final_y = y + top_crop_pixels
-        final_w = w - (2 * self.SIDE_MARGIN)
-        final_h = h - top_crop_pixels - self.BOTTOM_MARGIN
-
+        final_w = w - (2 * config.SIDE_MARGIN)
+        final_h = h - top_crop_pixels - config.BOTTOM_MARGIN
         return (final_x, final_y, final_w, final_h)
 
     def calibrate(self, screenshot: np.ndarray, output_dir: Path) -> bool:
         """Calibrate by finding the main red rectangle and save a preview."""
         print("Calibrating game area by finding the main red rectangle...")
-        
+
         region = self.find_main_red_rectangle(screenshot)
-        
+
         if region:
             self.game_region = region
             self.is_calibrated = True
-            print(f"Calibration successful! Game area defined at: {self.game_region}")
+            print(
+                f"Calibration successful! Game area defined at: {self.game_region}")
 
             try:
                 x, y, w, h = self.game_region
                 preview_image = screenshot[y:y+h, x:x+w]
-                
+
                 if preview_image.size > 0:
                     preview_path = output_dir / "_calibration_preview.png"
                     cv2.imwrite(str(preview_path), preview_image)
@@ -152,23 +141,21 @@ class GameAreaDetector:
         x, y, w, h = self.game_region
         return {"left": x, "top": y, "width": w, "height": h}
 
+
 class FileManager:
     """Handles file operations and naming."""
-
     def __init__(self, output_dir: str):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.counter = self._init_counter()
-
     def _init_counter(self) -> int:
         """Initialize the counter based on existing files in the directory."""
         existing_files = list(self.output_dir.glob("*.png"))
-        # Exclude the preview file from counting
-        existing_files = [f for f in existing_files if f.name != "_calibration_preview.png"]
-        
+        existing_files = [
+            f for f in existing_files if f.name != "_calibration_preview.png"]
         if not existing_files:
             return 0
-            
+
         nums = []
         for f in existing_files:
             try:
@@ -176,7 +163,7 @@ class FileManager:
                 nums.append(num)
             except (ValueError, IndexError):
                 continue
-                
+
         return max(nums) + 1 if nums else 0
 
     def generate_filename(self, action: str = 'idle') -> str:
@@ -190,9 +177,9 @@ class FileManager:
         filepath = self.output_dir / filename
         return cv2.imwrite(str(filepath), image)
 
+
 class MCOCDataCollector:
     """Main class for collecting MCOC gameplay data."""
-
     def __init__(self, fps: int = 4, auto_detect: bool = True):
         self.fps = fps
         self.interval = 1.0 / self.fps
@@ -200,7 +187,7 @@ class MCOCDataCollector:
 
         self.file_manager = FileManager(config.ASSETS_DIR)
         self.detector = GameAreaDetector() if auto_detect else None
-        self.input_handler = InputHandler()        
+        self.input_handler = InputHandler()
         self.is_in_fight = True
 
         self.stop_event = Event()
@@ -215,9 +202,10 @@ class MCOCDataCollector:
         try:
             with ScreenCapture() as capture:
                 full_screenshot = capture.capture_region()
-            
+
             if self.detector:
-                self.detector.calibrate(full_screenshot, self.file_manager.output_dir)
+                self.detector.calibrate(
+                    full_screenshot, self.file_manager.output_dir)
         except Exception as e:
             print(f"An error occurred during calibration: {e}")
 
@@ -232,8 +220,9 @@ class MCOCDataCollector:
 
     def _capture_loop(self):
         """Main capture loop running in a separate thread."""
-        region = self.detector.get_mss_region() if self.detector and self.detector.is_calibrated else None
-        
+        region = self.detector.get_mss_region(
+        ) if self.detector and self.detector.is_calibrated else None
+
         if region is None:
             print("Capture loop cannot start: game area not detected or not calibrated.")
             return
@@ -243,17 +232,20 @@ class MCOCDataCollector:
                 loop_start_time = time.time()
                 try:
                     screenshot = capture.capture_region(region)
-                    
+
                     if self._is_in_fight_area(screenshot):
                         action = self.input_handler.get_current_action()
-                        
+
                         # Salta il salvataggio se l'azione è 'idle'
                         if action == 'idle':
                             continue
-                        
-                        screenshot_resized = self._resize_to_fixed(screenshot, 224)
-                        filename = self.file_manager.generate_filename(action=action)
-                        self.file_manager.save_image(screenshot_resized, filename)
+
+                        screenshot_resized = self._resize_to_fixed(
+                            screenshot, 224)
+                        filename = self.file_manager.generate_filename(
+                            action=action)
+                        self.file_manager.save_image(
+                            screenshot_resized, filename)
 
                 except Exception as e:
                     print(f"Error in capture loop: {e}")
@@ -287,13 +279,14 @@ class MCOCDataCollector:
 
         if self.collection_thread and self.collection_thread.is_alive():
             self.collection_thread.join(timeout=2.0)
-        
+
         self.collection_thread = None
         print("Data collection stopped.")
 
     def get_output_dir(self) -> str:
         """Get the output directory path."""
         return str(self.file_manager.output_dir)
+
 
 if __name__ == "__main__":
     print("--- MCOC Data Collector ---")
@@ -303,15 +296,16 @@ if __name__ == "__main__":
     collector = None
     try:
         collector = MCOCDataCollector(output_dir="mcoc_data")
-        
+
         if not collector.detector or not collector.detector.is_calibrated:
             print("Could not initialize collector properly. Exiting.")
         else:
             print(f"Saving images to: {collector.get_output_dir()}")
-            print("Press W, A, S, D, or SPACE to capture data. Collection will run for 2 minutes.")
+            print(
+                "Press W, A, S, D, or SPACE to capture data. Collection will run for 2 minutes.")
             print("Press Ctrl+C in this console to stop early.")
             collector.start()
-            
+
             # Esegui per 120 secondi (2 minuti)
             time.sleep(120)
 
