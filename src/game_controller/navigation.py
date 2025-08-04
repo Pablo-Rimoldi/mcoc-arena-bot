@@ -5,6 +5,8 @@ from config.settings import config
 from src.data_collection.screen_capture import ScreenCapture
 from src.game_calibrator.game_area_detector import GameAreaDetector
 from src.data_collection.file_manager import FileManager
+import pyautogui
+import random
 
 
 class Navigator():
@@ -26,11 +28,21 @@ class Navigator():
             print(f"An error occurred during calibration: {e}")
     
     def move_to_arena(self):
-        print(self.detector.game_region)
+        self._random_move(r"assets\config\fight_menu.png")
 
-    def relative_position_encoding(self, position:tuple):
+
+    def relative_position_encoding(self):
         pass
 
+    def _random_move(self, filepathofimage, n=5):
+        x, y = pyautogui.locateCenterOnScreen(filepathofimage, confidence=.8)
+        dx = random.randint(-n, n)
+        dy = random.randint(-n, n)
+        perturbed_x = x + dx
+        perturbed_y = y + dy
+        pyautogui.moveTo(perturbed_x, perturbed_y)
+        pyautogui.click()
+        time.sleep(1)
 
 
 time.sleep(5)

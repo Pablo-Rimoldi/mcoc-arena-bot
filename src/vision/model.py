@@ -1,1 +1,0 @@
-# CNN model definition
