@@ -206,4 +206,6 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-assets/data/raw
+assets/data
+kaggle.json
+scripts/assets/data/raw

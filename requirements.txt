@@ -10,3 +10,6 @@ matplotlib
 scikit-learn
 seaborn
 tqdm
+requests
+pyautogui
+pydirectinput

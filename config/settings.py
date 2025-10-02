@@ -40,11 +40,11 @@ class Config:
 
     # Labels mapping
     LABEL_MAPPING = {
-        'a': 0,  # light_attack
-        's': 1,  # special
-        'd': 2,  # block
-        'w': 3,  # evade
-        'space': 4,  # medium_attack
+        'w': 0,  # light_attack
+        'd': 1,  # medium_attack  
+        'a': 2,  # evade
+        's': 3,  # parry
+        'space': 4  # special_attack
     }
 
     REVERSE_LABEL_MAPPING = {v: k for k, v in LABEL_MAPPING.items()}
